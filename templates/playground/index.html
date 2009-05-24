@@ -1,0 +1,67 @@
+{% extends "admin/base_site.html" %}
+
+{% block title %} Playground {% endblock %}
+{% block extrahead %}
+<script src="http://ajax.googleapis.com/ajax/libs/jquery/1.2.6/jquery.min.js" type="text/javascript">
+</script>
+<script type="text/javascript">
+function process_json(json) {
+    $("#reply").html(json)
+}
+
+$(document).ready(function(){
+        $("#playground_submit").click(function(event) {
+            event.preventDefault();
+            form = $('#playground_form');
+            $("#reply").html('<img src="http://media.ericholscher.com/spinner.gif"');
+            $.post(form.attr('action'), form.serialize(), process_json);
+        });
+});
+</script>
+{% endblock %}
+{% block content %}
+
+<div id="content-main" class="module">
+<div class=container>
+
+<h2> Template Playground </h2>
+<p>
+    You can get to a list of template tags and filter to play with from the documentation menu.
+<br><br>
+    Otherwise please feel free to play
+
+</p>
+
+<div style="float: left; width: 400px;">
+<h2> Input </h2>
+<form id='playground_form' name="template_playground" action="{% url playground_render %}" method="POST" enctype="application/x-www-form-urlencoded">
+<p> Context Variables (Currently only supports text values)
+<br>
+Entered as a key:value pair, seperated by newlines </p>
+<p><textarea id="context" name=context cols="45" rows="5">
+value: go KU!
+number: 33
+</textarea> </p>
+<p> Template to render </p>
+<p>
+<textarea id="template" name=template cols="45" rows="15">
+{% templatetag openvariable %} value|capfirst {% templatetag closevariable %}<br>
+{% templatetag openvariable %} number|add:"9" {% templatetag closevariable %}
+</textarea>
+</p>
+<p>
+<input id='playground_submit' type="submit"/>
+</p>
+</form>
+</div>
+
+<div style="float: right; width: 400px;">
+    <h2>Output</h2>
+    <div id=reply>
+    <p>This will show your template</p>
+    </div>
+</div>
+</div>
+
+</div>
+{% endblock %}

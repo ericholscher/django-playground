@@ -1,0 +1,103 @@
+{% extends "admin/base_site.html" %}
+
+{% block title %} Playground {% endblock %}
+{% block coltype %}colSM{% endblock %}
+{% block extrahead %}
+<script src="http://ajax.googleapis.com/ajax/libs/jquery/1.2.6/jquery.min.js" type="text/javascript">
+</script>
+<script type="text/javascript">
+function process_json(json) {
+    $("#reply").html(json)
+}
+
+function check_template(event) {
+    event.preventDefault();
+    form = $('#playground_form');
+    $("#reply").html('<img src="http://media.ericholscher.com/spinner.gif"');
+    $.post(form.attr('action'), form.serialize(), process_json);}
+$(document).ready(function(){
+        $("#playground_submit").click(function(event) {
+            check_template(event)
+        });
+        /*
+        $("#template").bind('keyup', function(event){
+            setTimeout(function() {
+
+
+            })
+            var last_time = new Date().getTime();
+            var nowtime = new Date().getTime();
+            var delta = nowtime - last_time;
+            if delta > 2000 {
+                check_template(event)
+            }
+        });
+        */
+    });
+</script>
+{% endblock %}
+{% block breadcrumbs %}<div class="breadcrumbs"><a href="../../../../">Home</a> &rsaquo; <a href="../../../">Documentation</a> &rsaquo; <a href="../../">Playground</a> &rsaquo; {{ tag_obj.name }}</div>{% endblock %}
+
+{% block content %}
+<h1>Playground</h1>
+
+<div id="content-main" class="module">
+<div class=container>
+
+<h2> Template Playground </h2>
+<h3>{{ tag_obj.library }}: {{ tag_obj.name }}</h3>
+<h5> {{ tag_obj.title }}</h5>
+{{ tag_obj.body }}<br>
+
+<div style="float: left; width: 300px;">
+<h2> Input </h2>
+<form id='playground_form' name="template_playground" action="{% url playground_render %}" method="POST" enctype="application/x-www-form-urlencoded">
+<p> Context Variables (Currently only supports text values)
+<br>
+Entered as a key:value pair, seperated by newlines </p>
+<p><textarea id="context" name=context cols="45" rows="5">
+value: tESTING
+</textarea> </p>
+<p> Template to render </p>
+<p>
+<textarea id="template" name=template cols="45" rows="15">
+{% if tag_obj.library %}
+{% templatetag openblock %} load {{ tag_obj.library }} {% templatetag closeblock %}
+{% endif %}
+{{ template_code }}
+{% if as_var %}
+{% templatetag openvariable %} {{ as_var }} {% templatetag closevariable %}
+{% endif %}
+</textarea>
+</p>
+<p>
+<input id='playground_submit' type="submit"/>
+</p>
+</form>
+</div>
+
+<div style="float: right; width: 300px;">
+    <h2>Output</h2>
+    <div id=reply>
+    <p>This will show your template</p>
+    </div>
+</div>
+</div>
+
+</div>
+{% endblock %}
+
+{% block sidebar %}
+<div id="content-related">
+{% regroup tags|dictsort:"library" by library as tag_libraries %}
+{% for library in tag_libraries %}
+<div class="module">
+    <h2>{% firstof library.grouper "Built-in tags" %}</h2>
+    <ul>
+    {% for tag in library.list|dictsort:"name" %}
+        <li><a href="../{{ tag.name }}/">{{ tag.name }}</a></li>
+    {% endfor %}
+    </ul>
+</div>
+{% endfor %}
+{% endblock %}
