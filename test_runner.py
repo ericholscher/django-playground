@@ -6,7 +6,34 @@ from django.test.utils import setup_test_environment, teardown_test_environment
 from django.test.testcases import OutputChecker, DocTestRunner, TestCase
 from django.test.simple import *
 
-from pony_build.client.pony_client import send, get_arch
+import urllib2, urllib
+import simplejson
+
+def get_arch():
+    import distutils.util
+    return distutils.util.get_platform()
+
+def _send(server, info, results):
+    print 'connecting to', server
+    try:
+        urllib2.urlopen('http://localhost:8000/pony_server/api/django/builds/',
+                    data=urllib.urlencode({'info': simplejson.dumps(info), 'results': simplejson.dumps(results)}))
+    except Exception, e:
+        #It was calling 201 an error...
+        print "URL POST: %s" % e
+
+
+def send(server_url, x, hostname=None, tags=()):
+    client_info, reslist = x
+    if hostname is None:
+        import socket
+        hostname = socket.gethostname()
+
+    client_info['host'] = hostname
+    client_info['tags'] = tags
+
+    print 'using server URL:', server_url
+    _send(server_url, client_info, reslist)
 
 
 def run_tests(test_labels, verbosity=1, interactive=True, extra_tests=[]):
@@ -71,12 +98,38 @@ def run_tests(test_labels, verbosity=1, interactive=True, extra_tests=[]):
             all_apps[app] = 1
 
     def get_app_name_from_test(test):
-        app = test.__module__.split('.tests.')[0]
-        if not app:
-            app = test.__module__.split('.models.')[0]
-        if not app:
-            app = test.__module__.split('.')[0]
+        try:
+            #doctest
+            app = test._dt_test.name.split('.tests.')[0]
+        except AttributeError:
+            #unit test in tests
+            app = test.__module__.split('.tests.')[0]
+            if not app:
+                #Unit test in models.
+                app = test.__module__.split('.models.')[0]
+            if not app:
+                app = test.__module__.split('.')[0]
         return app
+
+    arch = get_arch()
+
+    project = getattr(settings, 'TEST_PROJECT', '')
+    if project:
+        success = True
+        err_list = []
+        for failure in result.failures + result.errors:
+            success = False
+            err_list.append(failure[1])
+        if err_list:
+            errout = '\n'.join(err_list)
+        client_info = dict(package=project, arch=arch, success=success)
+        result_list = []
+        result_list.append({'awesome_tests':
+                                {'commands': ['woot'] },
+                                'status': status,
+                                'errout': errout
+                            })
+        send('http://djangoproject.com:9999/xmlrpc', (client_info, result_list), tags=['django_test_runner'])
 
 
     failed_apps = {}
@@ -90,7 +143,6 @@ def run_tests(test_labels, verbosity=1, interactive=True, extra_tests=[]):
         app = get_app_name_from_test(test)
         insert_failure(failed_apps, app, failure)
 
-    arch = get_arch()
     for app in all_apps:
         success = app not in failed_apps.keys()
         if app in failed_apps:
@@ -104,7 +156,9 @@ def run_tests(test_labels, verbosity=1, interactive=True, extra_tests=[]):
                                 'errout': errout
                             })
         client_info = dict(package=app, arch=arch, success=success)
-        send('http://djangoproject.com:9999/xmlrpc', (client_info, result_list), tags=['django_test_runner'])
+        print "Sending for %s" % app
+        send('http://localhost:8000/pony_server/xmlrpc/', (client_info, result_list), tags=['django_test_runner'])
+        #send('http://djangoproject.com:9999/xmlrpc', (client_info, result_list), tags=['django_test_runner'])
 
 
 
