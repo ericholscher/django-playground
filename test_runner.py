@@ -81,7 +81,6 @@ def run_tests(test_labels, verbosity=1, interactive=True, extra_tests=[]):
 
     failed_apps = {}
     all_apps = {}
-    import ipdb; ipdb.set_trace()
     for test in suite._tests:
         test_app = get_app_name_from_test(test)
         increment_app(all_apps, test_app)
@@ -92,7 +91,6 @@ def run_tests(test_labels, verbosity=1, interactive=True, extra_tests=[]):
         insert_failure(failed_apps, app, failure)
 
     arch = get_arch()
-    import ipdb; ipdb.set_trace()
     for app in all_apps:
         success = app not in failed_apps.keys()
         if app in failed_apps:
