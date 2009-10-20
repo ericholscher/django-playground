@@ -24,7 +24,7 @@ def parse_ttag(token, required_tags):
 
     """
 
-    if isinstance(token, template.Token):
+    if hasattr(token, 'split_contents'):
         bits = token.split_contents()
     else:
         bits = token.split(' ')
@@ -46,29 +46,33 @@ class SelfParsingNode(template.Node):
 
     """
 
-    def __init__(self, required_tags):
-        self.required_tags = required_tags
-        #self.__name__ = 'sweet_tag_' + '_'.join(required_tags)
+    def __init__(self, required_tags=[]):
+        if not required_tags:
+            self.required_tags = self._get_tags()
+        else:
+            self.required_tags = required_tags
+
+    def _get_tags(self):
+        return []
 
     def render(self, context):
-        self.parsed = self.parser(context)
-        return self.display_content(self.parsed, context)
-
-    def parser(self, context):
-        return parse_ttag(self.token, self.required_tags)
-
-    def display_content(self, tags, context):
-        print "%s, %s" % (tags, context)
-        raise NotImplementedError
+        self.context = context
+        self.parsed = parse_ttag(self.token, self.required_tags)
+        for tag, val in self.parsed.items():
+            setattr(self, '_'+tag, val)
+        return self.render_content(self.parsed, context)
 
     def __call__(self, parser, token):
         self.token = token
         self.parser = parser
         return self
 
+    def render_content(self, tags, context):
+        raise NotImplementedError
+
+
 class ParsingNode(SelfParsingNode):
-    def display_content(self, tags, context):
+    def render_content(self, tags, context):
         for tag in self.required_tags:
             print "Updating %s:%s" % (tag, tags[tag])
             context.update({tag: tags[tag]})
-
