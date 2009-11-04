@@ -47,12 +47,12 @@ class ClassBasedTag(template.Node):
 
     def render(self, context):
         self.context = context
-        self.parsed = self.parse_content(self.parser, self.token)
         return self.render_content(context)
 
     def __call__(self, parser, token):
         self.token = token
         self.parser = parser
+        self.parsed = self.parse_content(parser, token)
         return self
 
     def parse_content(self, parser, token):
@@ -69,6 +69,28 @@ class ClassBasedTag(template.Node):
         whatever representation is appropriate for the template.
         """
         raise NotImplementedError
+
+class OldGetContentTag(ClassBasedTag):
+
+    def parse_content(self, parser, token):
+        bits = token.split_contents()
+        if len(bits) != 4:
+            raise template.TemplateSyntaxError("'%s' tag takes four arguments" % bits[0])
+        if bits [2] != 'as':
+            raise template.TemplateSyntaxError("third argument to '%s' tag must be 'as'" % bits[0])
+        return (bits[1], 1, bits[3])
+
+    def render_content(self, context):
+        model, pk, varname = self.parsed
+        self.pk = template.Variable(pk)
+        self.varname = varname
+        self.model = get_model(*model.split('.'))
+        if self.model is None:
+            raise template.TemplateSyntaxError("Generic content tag got invalid model: %s" % model)
+        context[self.varname] = self.model._default_manager.get(pk=self.pk.resolve(context))
+
+
+get_content_tag = GetContentTag()
 
 
 class SelfParsingTag(ClassBasedTag):
@@ -88,11 +110,8 @@ class SelfParsingTag(ClassBasedTag):
             setattr(self, '_' + tag, val)
 
     def render_content(self, context):
-        self.model = get_model(*self._for.split('.'))
-        if self.model is None:
-            raise template.TemplateSyntaxError("Generic content tag got invalid model: %s" % model)
-        query_set = self.model._default_manager.all()
-        context[self._as] = list(query_set[:self._limit])
+        raise NotImplementedError
+
 
 
 class SimpleContextTag(SelfParsingTag):
@@ -100,3 +119,11 @@ class SimpleContextTag(SelfParsingTag):
         for tag in self.required_tags:
             print "Updating %s:%s" % (tag, tags[tag])
             context.update({tag: tags[tag]})
+
+class GetContentTag(SelfParsingTag):
+    def render_content(self, context):
+        self.model = get_model(*self._for.split('.'))
+        if self.model is None:
+            raise template.TemplateSyntaxError("Generic content tag got invalid model: %s" % model)
+        query_set = self.model._default_manager.all()
+        context[self._as] = list(query_set[:self._limit])
