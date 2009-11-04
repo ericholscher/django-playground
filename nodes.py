@@ -37,14 +37,41 @@ def parse_ttag(token, required_tags):
     return tags
 
 
-class SelfParsingNode(template.Node):
+class ClassBasedTag(template.Node):
     """
-    Node that updates the context with certain values.
+    Tag that combined parsing and rendering
 
-    Subclasses should define ``get_content()``, which should return a
-    dictionary to be added to the context.
+    Subclasses should define ``render_content()`` and ``parse_content()``.
 
     """
+
+    def render(self, context):
+        self.context = context
+        self.parsed = self.parse_content(self.parser, self.token)
+        return self.render_content(context)
+
+    def __call__(self, parser, token):
+        self.token = token
+        self.parser = parser
+        return self
+
+    def parse_content(self, parser, token):
+        """
+        This is called to parse the incoming context.
+        """
+        raise NotImplementedError
+
+    def render_content(self, context):
+        """
+        This is called to return a node to the template.
+
+        It should return set things in the context or return
+        whatever representation is appropriate for the template.
+        """
+        raise NotImplementedError
+
+
+class SelfParsingTag(ClassBasedTag):
 
     def __init__(self, required_tags=[]):
         if not required_tags:
@@ -55,23 +82,20 @@ class SelfParsingNode(template.Node):
     def _get_tags(self):
         return []
 
-    def render(self, context):
-        self.context = context
-        self.parsed = parse_ttag(self.token, self.required_tags)
-        for tag, val in self.parsed.items():
-            setattr(self, '_'+tag, val)
-        return self.render_content(self.parsed, context)
+    def parse_content(self, parser, token):
+        parsed = parse_ttag(token, self.required_tags)
+        for tag, val in parsed.items():
+            setattr(self, '_' + tag, val)
 
-    def __call__(self, parser, token):
-        self.token = token
-        self.parser = parser
-        return self
-
-    def render_content(self, tags, context):
-        raise NotImplementedError
+    def render_content(self, context):
+        self.model = get_model(*self._for.split('.'))
+        if self.model is None:
+            raise template.TemplateSyntaxError("Generic content tag got invalid model: %s" % model)
+        query_set = self.model._default_manager.all()
+        context[self._as] = list(query_set[:self._limit])
 
 
-class ParsingNode(SelfParsingNode):
+class SimpleContextTag(SelfParsingTag):
     def render_content(self, tags, context):
         for tag in self.required_tags:
             print "Updating %s:%s" % (tag, tags[tag])

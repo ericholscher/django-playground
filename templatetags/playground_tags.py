@@ -1,4 +1,4 @@
-from playground.nodes import SelfParsingNode
+from playground.nodes import SelfParsingTag
 from django import template
 from django.db.models import get_model
 
@@ -6,12 +6,12 @@ from django.db.models import get_model
 register = template.Library()
 
 
-class GetContentTag(SelfParsingNode):
+class GetContentTag(SelfParsingTag):
 
     def _get_tags(self):
         return ['as', 'for', 'limit']
 
-    def render_content(self, tags, context):
+    def render_content(self, context):
         self.model = get_model(*self._for.split('.'))
         if self.model is None:
             raise template.TemplateSyntaxError("Generic content tag got invalid model: %s" % model)

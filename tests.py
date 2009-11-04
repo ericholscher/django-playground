@@ -1,7 +1,6 @@
 from django.test import TestCase
 
 from django.template import Context, Template
-from playground.nodes import ParsingNode
 from django import template
 
 from mock import Mock
