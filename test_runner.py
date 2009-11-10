@@ -5,35 +5,52 @@ from django.test import _doctest as doctest
 from django.test.utils import setup_test_environment, teardown_test_environment
 from django.test.testcases import OutputChecker, DocTestRunner, TestCase
 from django.test.simple import *
+from django.template.defaultfilters import slugify
 
 import urllib2, urllib
 import simplejson
+import datetime
+import os
+import httplib2
+
+#http://pony_server.com
+PB_SERVER = getattr(settings, 'PB_SERVER', '')
+PB_USER = getattr(settings, 'PB_USER', '')
+PB_PASS = getattr(settings, 'PB_PASS', '')
+hash = ("%s:%s" % (PB_USER, PB_PASS)).encode("base64").strip()
+PB_AUTH = "Basic %s" % hash
+
+
+STARTED = datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S')
 
 def get_arch():
     import distutils.util
     return distutils.util.get_platform()
 
-def _send(server, info, results):
+def send(server, app, result_dict):
+    server = server % app
     print 'connecting to', server
+    to_send = simplejson.dumps(result_dict)
     try:
-        urllib2.urlopen('http://localhost:8000/pony_server/api/django/builds/',
-                    data=urllib.urlencode({'info': simplejson.dumps(info), 'results': simplejson.dumps(results)}))
+        h = httplib2.Http(".cache")
+        resp, content = h.request(server + '/builds', "POST", body=to_send,
+            headers={'content-type':'application/json',
+                     'AUTHORIZATION': PB_AUTH}
+                )
     except Exception, e:
         #It was calling 201 an error...
         print "URL POST: %s" % e
 
 
-def send(server_url, x, hostname=None, tags=()):
-    client_info, reslist = x
-    if hostname is None:
-        import socket
-        hostname = socket.gethostname()
+def create_package(app):
+    PUT_VAR = '{"name": "%s"}' % app
+    SERVER = "PB_SERVER/pony_server/%s" % app
+    h = httplib2.Http(".cache")
+    resp, content = h.request(SERVER, "PUT", body=PUT_VAR,
+        headers={'content-type':'application/json',
+                 'AUTHORIZATION': PB_AUTH}
+            )
 
-    client_info['host'] = hostname
-    client_info['tags'] = tags
-
-    print 'using server URL:', server_url
-    _send(server_url, client_info, reslist)
 
 
 def run_tests(test_labels, verbosity=1, interactive=True, extra_tests=[]):
@@ -109,9 +126,7 @@ def run_tests(test_labels, verbosity=1, interactive=True, extra_tests=[]):
                 app = test.__module__.split('.models.')[0]
             if not app:
                 app = test.__module__.split('.')[0]
-        return app
-
-    arch = get_arch()
+        return app.replace('.', '_')
 
     project = getattr(settings, 'TEST_PROJECT', '')
     if project:
@@ -143,23 +158,36 @@ def run_tests(test_labels, verbosity=1, interactive=True, extra_tests=[]):
         app = get_app_name_from_test(test)
         insert_failure(failed_apps, app, failure)
 
+    arch = get_arch()
+    import socket
+    hostname = socket.gethostname()
+
     for app in all_apps:
         success = app not in failed_apps.keys()
         if app in failed_apps:
             errout = '\n'.join([failure[1] for failure in failed_apps[app]])
         else:
             errout = "%s Passed" % all_apps[app]
-        result_list = []
-        result_list.append({'awesome_tests':
-                                {'commands': ['woot'] },
-                                'status': True,
-                                'errout': errout
-                            })
-        client_info = dict(package=app, arch=arch, success=success)
-        print "Sending for %s" % app
-        send('http://localhost:8000/pony_server/xmlrpc/', (client_info, result_list), tags=['django_test_runner'])
-        #send('http://djangoproject.com:9999/xmlrpc', (client_info, result_list), tags=['django_test_runner'])
+        build_dict = {'success': success,
+                        'started': STARTED,
+                        'finished': datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S'),
+                        'tags': ['django_test_runner'],
+                        'client': {
+                            'arch': arch,
+                            'host': hostname,
+                            'user': PB_USER,
+                                },
+                        'results': [
+                           {'success': success,
+                            'name': 'Test Application',
+                            'errout': errout,
+                            'started': STARTED,
+                            'finished': datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S'),
+                           }
+                        ]
+                    }
 
-
+        create_package(app)
+        send('PB_SERVER/pony_server/%s', app, build_dict)
 
     return len(result.failures) + len(result.errors)
